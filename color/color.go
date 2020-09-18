@@ -34,7 +34,6 @@ func apply(str string, start, end int) string {
 	}
 
 	regex := regexp.MustCompile(fmt.Sprintf("\\x1b\\[%dm", end))
-	fmt.Println(regex.FindAllString(str, -1))
 	// Remove any occurrences of reset to make sure color isn't messed up
 	sanitized := regex.ReplaceAllString(str, "")
 	return fmt.Sprintf("\x1b[%dm%s\x1b[%dm", start, sanitized, end)
