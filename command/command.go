@@ -11,10 +11,7 @@ import (
 // checking if command exists within the user's PATH.
 func IsAvailable(command string) bool {
 	_, err := exec.LookPath(command)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // Command manages the configuration of a command
