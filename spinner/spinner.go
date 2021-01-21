@@ -16,7 +16,8 @@ var frames = [...]string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧",
 // Spinner represents the state of the spinner.
 type Spinner struct {
 	interval time.Duration
-	out      io.Writer
+	w        io.Writer
+	debugw   io.Writer
 	mu       *sync.RWMutex
 	// stopChan is used to stop the spinner
 	stopChan chan struct{}
@@ -32,13 +33,16 @@ type Spinner struct {
 	// number of items completed
 	completed int
 	maxMsgLen int
+	// a list of debug messages that will be written
+	// to debugw on the next frame
+	debugMsgs []string
 }
 
 // New creates a new spinner instance using the given options.
 func New(opts ...Option) *Spinner {
 	s := &Spinner{
 		interval: 100 * time.Millisecond,
-		out:      os.Stderr,
+		w:        os.Stderr,
 		mu:       &sync.RWMutex{},
 		stopChan: make(chan struct{}, 1),
 		active:   false,
@@ -68,7 +72,17 @@ func WithInterval(d time.Duration) Option {
 // WithWriter sets the writer that should be used for writting the spinner to.
 func WithWriter(w io.Writer) Option {
 	return func(s *Spinner) {
-		s.out = w
+		s.w = w
+	}
+}
+
+// WithDebugWriter sets the writter that should be used for debug messages.
+// All spinner lines will be written to this writer. This is useful if you
+// wish to keep a record of all messages written for debugging purposes, since
+// normally they get erased by the spinner.
+func WithDebugWriter(w io.Writer) Option {
+	return func(s *Spinner) {
+		s.debugw = w
 	}
 }
 
@@ -128,15 +142,21 @@ func (s *Spinner) Stop() {
 	}
 
 	s.active = false
+	s.stopChan <- struct{}{}
+	// Add last msg as a debug msg before we do the final erase.
+	// Need to do this manually since we aren't using setMsg
+	if s.msg != "" {
+		// Drop first char since it's a space
+		s.debugMsgs = append(s.debugMsgs, s.msg[1:])
+	}
 	s.erase()
 	if s.stopMsg != "" {
 		// Make sure there's a trailing newline
 		if s.stopMsg[len(s.stopMsg)-1] != '\n' {
 			s.stopMsg += "\n"
 		}
-		fmt.Fprint(s.out, s.stopMsg)
+		fmt.Fprint(s.w, s.stopMsg)
 	}
-	s.stopChan <- struct{}{}
 }
 
 // Inc increments the progress of the spinner. If the spinner
@@ -172,17 +192,36 @@ func (s *Spinner) setMsg(m string) {
 	if m == "" {
 		return
 	}
+	// Make sure there is no trailing newline or it will mess up the spinner
+	if m[len(m)-1] == '\n' {
+		m = m[:len(m)-1]
+	}
 	// Truncate msg if it's too long
 	if len(m) > s.maxMsgLen {
 		// DISCUSS(@cszatmary): Should the ... count as part of the length or no?
 		m = m[:s.maxMsgLen] + "..."
 	}
-	// Make sure message has a leading space to pad between it and the
-	// spinner icon
+	// Make sure message has a leading space to pad between it and the spinner icon
 	if m[0] != ' ' {
 		m = " " + m
 	}
+	// Save previous msg as a debug msg so it can be written to the debug writer
+	if s.msg != "" {
+		// Drop first char since it's a space
+		s.debugMsgs = append(s.debugMsgs, s.msg[1:])
+	}
 	s.msg = m
+}
+
+// Debugf writes the format specifier as a debug message. If the spinner was not
+// created with the WithDebugWriter option, then this method does nothing.
+func (s *Spinner) Debugf(format string, args ...interface{}) {
+	if s.debugw == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.debugMsgs = append(s.debugMsgs, fmt.Sprintf(format, args...))
 }
 
 // run runs the spinner. It should be called in a separate goroutine because
@@ -205,7 +244,7 @@ func (s *Spinner) run() {
 				if s.count > 1 {
 					line += fmt.Sprintf("(%d/%d) ", s.completed, s.count)
 				}
-				fmt.Fprint(s.out, line)
+				fmt.Fprint(s.w, line)
 				s.lastOutput = line
 				d := s.interval
 
@@ -221,16 +260,22 @@ func (s *Spinner) erase() {
 	n := utf8.RuneCountInString(s.lastOutput)
 	if runtime.GOOS == "windows" {
 		clearString := "\r" + strings.Repeat(" ", n) + "\r"
-		fmt.Fprint(s.out, clearString)
-		s.lastOutput = ""
-		return
+		fmt.Fprint(s.w, clearString)
+	} else {
+		// "\033[K" for macOS Terminal
+		for _, c := range []string{"\b", "\127", "\b", "\033[K"} {
+			fmt.Fprint(s.w, strings.Repeat(c, n))
+		}
+		// erases to end of line
+		fmt.Fprint(s.w, "\r\033[K")
 	}
 
-	// "\033[K" for macOS Terminal
-	for _, c := range []string{"\b", "\127", "\b", "\033[K"} {
-		fmt.Fprint(s.out, strings.Repeat(c, n))
+	// Write any debug msgs
+	if s.debugw != nil {
+		for _, m := range s.debugMsgs {
+			fmt.Fprintln(s.debugw, m)
+		}
+		s.debugMsgs = nil
 	}
-	// erases to end of line
-	fmt.Fprintf(s.out, "\r\033[K")
 	s.lastOutput = ""
 }
