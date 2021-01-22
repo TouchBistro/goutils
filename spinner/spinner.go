@@ -1,6 +1,7 @@
 package spinner
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -17,7 +18,6 @@ var frames = [...]string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧",
 type Spinner struct {
 	interval time.Duration
 	w        io.Writer
-	debugw   io.Writer
 	mu       *sync.RWMutex
 	// stopChan is used to stop the spinner
 	stopChan chan struct{}
@@ -33,9 +33,12 @@ type Spinner struct {
 	// number of items completed
 	completed int
 	maxMsgLen int
+	// buffer to keep track of message to write to w
+	// these will be written on each call of erase
 	// a list of debug messages that will be written
 	// to debugw on the next frame
-	debugMsgs []string
+	msgBuf      *bytes.Buffer
+	persistMsgs bool
 }
 
 // New creates a new spinner instance using the given options.
@@ -49,6 +52,7 @@ func New(opts ...Option) *Spinner {
 		// default to 1 since we don't show progress on 1 anyway
 		count:     1,
 		maxMsgLen: 80,
+		msgBuf:    &bytes.Buffer{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -73,16 +77,6 @@ func WithInterval(d time.Duration) Option {
 func WithWriter(w io.Writer) Option {
 	return func(s *Spinner) {
 		s.w = w
-	}
-}
-
-// WithDebugWriter sets the writter that should be used for debug messages.
-// All spinner lines will be written to this writer. This is useful if you
-// wish to keep a record of all messages written for debugging purposes, since
-// normally they get erased by the spinner.
-func WithDebugWriter(w io.Writer) Option {
-	return func(s *Spinner) {
-		s.debugw = w
 	}
 }
 
@@ -118,6 +112,14 @@ func WithMaxMessageLength(l int) Option {
 	}
 }
 
+// WithPersistMessages sets whether or not messages should be persisted to the writter
+// when the message is updated. By default messages are not persisted and are replaced.
+func WithPersistMessages(b bool) Option {
+	return func(s *Spinner) {
+		s.persistMsgs = b
+	}
+}
+
 // Start will start the spinner.
 // If the spinner is already running, Start will do nothing.
 func (s *Spinner) Start() {
@@ -145,10 +147,7 @@ func (s *Spinner) Stop() {
 	s.stopChan <- struct{}{}
 	// Add last msg as a debug msg before we do the final erase.
 	// Need to do this manually since we aren't using setMsg
-	if s.msg != "" {
-		// Drop first char since it's a space
-		s.debugMsgs = append(s.debugMsgs, s.msg[1:])
-	}
+	s.persistMsg()
 	s.erase()
 	if s.stopMsg != "" {
 		// Make sure there's a trailing newline
@@ -205,23 +204,35 @@ func (s *Spinner) setMsg(m string) {
 	if m[0] != ' ' {
 		m = " " + m
 	}
-	// Save previous msg as a debug msg so it can be written to the debug writer
-	if s.msg != "" {
-		// Drop first char since it's a space
-		s.debugMsgs = append(s.debugMsgs, s.msg[1:])
-	}
+	s.persistMsg()
 	s.msg = m
 }
 
-// Debugf writes the format specifier as a debug message. If the spinner was not
-// created with the WithDebugWriter option, then this method does nothing.
-func (s *Spinner) Debugf(format string, args ...interface{}) {
-	if s.debugw == nil {
+// persistMsg will handle persisting msg if required. The caller must already hold s.lock.
+func (s *Spinner) persistMsg() {
+	if !s.persistMsgs || s.msg == "" {
 		return
 	}
+	// The message should always be written on it's own line so make sure there is a newline before
+	if s.msgBuf.Len() > 0 && s.msgBuf.Bytes()[s.msgBuf.Len()-1] != '\n' {
+		s.msgBuf.WriteByte('\n')
+	}
+	// Drop first char since it's a space
+	s.msgBuf.WriteString(s.msg[1:])
+	s.msgBuf.WriteByte('\n')
+}
+
+// Write writes p to the spinner's writer after the current frame has been erased.
+// Write will always immediately return successfully as p is first written to an internal buffer.
+// The actual writing of the data to the spinner's writer will not occur until the appropriate time
+// during the spinner animation.
+//
+// Write will add a newline to the end of p in order to ensure that it does not interfere with
+// the spinner animation.
+func (s *Spinner) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.debugMsgs = append(s.debugMsgs, fmt.Sprintf(format, args...))
+	return s.msgBuf.Write(p)
 }
 
 // run runs the spinner. It should be called in a separate goroutine because
@@ -270,12 +281,12 @@ func (s *Spinner) erase() {
 		fmt.Fprint(s.w, "\r\033[K")
 	}
 
-	// Write any debug msgs
-	if s.debugw != nil {
-		for _, m := range s.debugMsgs {
-			fmt.Fprintln(s.debugw, m)
+	if s.msgBuf.Len() > 0 {
+		if s.msgBuf.Bytes()[s.msgBuf.Len()-1] != '\n' {
+			s.msgBuf.WriteByte('\n')
 		}
-		s.debugMsgs = nil
+		// Ignore error because there's nothing we can really do about it
+		_, _ = s.msgBuf.WriteTo(s.w)
 	}
 	s.lastOutput = ""
 }

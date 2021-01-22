@@ -2,6 +2,7 @@ package spinner_test
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -125,23 +126,21 @@ func TestSpinnerCounterMessage(t *testing.T) {
 	}
 }
 
-func TestSpinnerDebug(t *testing.T) {
+func TestSpinnerPersist(t *testing.T) {
 	const count = 3
 	buf := &syncBuffer{}
-	debugBuf := &syncBuffer{}
 	s := spinner.New(
 		spinner.WithInterval(10*time.Millisecond),
 		spinner.WithWriter(buf),
-		spinner.WithDebugWriter(debugBuf),
 		spinner.WithStartMessage("Cloning repos"),
 		spinner.WithStopMessage("Cloned all repos"),
 		spinner.WithCount(count),
+		spinner.WithPersistMessages(true),
 	)
 	s.Start()
 	for i := 1; i < count+1; i++ {
 		time.Sleep(15 * time.Millisecond)
 		s.IncWithMessagef("Cloned repo %d", i)
-		s.Debugf("debug stuff %d", i)
 	}
 	s.Stop()
 
@@ -160,8 +159,12 @@ func TestSpinnerDebug(t *testing.T) {
 	// Just make sure that the text we expect appears in the output
 	wantMsgs := []string{
 		"Cloning repos (0/3)",
+		"Cloning repos\n",
 		"Cloned repo 1 (1/3)",
+		"Cloned repo 1\n",
 		"Cloned repo 2 (2/3)",
+		"Cloned repo 2\n",
+		"Cloned repo 3\n",
 		"Cloned all repos",
 	}
 	for _, wantMsg := range wantMsgs {
@@ -169,18 +172,50 @@ func TestSpinnerDebug(t *testing.T) {
 			t.Errorf("got %q, want to contain %q", got, wantMsg)
 		}
 	}
+}
 
-	gotDebug := debugBuf.String()
-	wantDebug := `Cloning repos
-debug stuff 1
-Cloned repo 1
-debug stuff 2
-Cloned repo 2
-debug stuff 3
-Cloned repo 3
-`
-	if gotDebug != wantDebug {
-		t.Errorf("got %s, want %s", gotDebug, wantDebug)
+func TestSpinnerWrite(t *testing.T) {
+	const count = 3
+	buf := &syncBuffer{}
+	s := spinner.New(
+		spinner.WithInterval(10*time.Millisecond),
+		spinner.WithWriter(buf),
+		spinner.WithStartMessage("Cloning repos"),
+		spinner.WithStopMessage("Cloned all repos"),
+		spinner.WithCount(count),
+	)
+	s.Start()
+	for i := 1; i < count+1; i++ {
+		time.Sleep(15 * time.Millisecond)
+		s.Inc()
+		fmt.Fprintf(s, "debug stuff %d", i)
+	}
+	s.Stop()
+
+	// wait a bit because the spinner still has to erase before stopping
+	time.Sleep(50 * time.Millisecond)
+	got := buf.String()
+
+	// Should be at least 4 frames
+	wantFrames := "⠋⠙⠹⠸"
+	if !containsAll(got, wantFrames) {
+		t.Errorf("got %q, want to contain all %q", got, wantFrames)
+	}
+
+	// Asserting the output is a bit tricky because of the special erase codes written
+	// to erase the text in terminals.
+	// Just make sure that the text we expect appears in the output
+	wantMsgs := []string{
+		"debug stuff 1\n",
+		"debug stuff 2\n",
+		"debug stuff 3\n",
+		"Cloning repos",
+		"Cloned all repos",
+	}
+	for _, wantMsg := range wantMsgs {
+		if !strings.Contains(got, wantMsg) {
+			t.Errorf("got %q, want to contain %q", got, wantMsg)
+		}
 	}
 }
 
