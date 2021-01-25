@@ -18,7 +18,7 @@ var frames = [...]string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧",
 type Spinner struct {
 	interval time.Duration
 	w        io.Writer
-	mu       *sync.RWMutex
+	mu       *sync.Mutex
 	// stopChan is used to stop the spinner
 	stopChan chan struct{}
 	active   bool
@@ -46,7 +46,7 @@ func New(opts ...Option) *Spinner {
 	s := &Spinner{
 		interval: 100 * time.Millisecond,
 		w:        os.Stderr,
-		mu:       &sync.RWMutex{},
+		mu:       &sync.Mutex{},
 		stopChan: make(chan struct{}, 1),
 		active:   false,
 		// default to 1 since we don't show progress on 1 anyway
@@ -182,6 +182,13 @@ func (s *Spinner) IncWithMessage(m string) {
 // reached full progress, IncWithMessagef does nothing.
 func (s *Spinner) IncWithMessagef(format string, args ...interface{}) {
 	s.IncWithMessage(fmt.Sprintf(format, args...))
+}
+
+// UpdateMessage changes the current message being shown by the spinner.
+func (s *Spinner) UpdateMessage(m string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.setMsg(m)
 }
 
 // setMsg sets the spinner message to m. If m is longer then s.maxMsgLen it will

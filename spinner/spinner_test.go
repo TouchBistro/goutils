@@ -126,6 +126,45 @@ func TestSpinnerCounterMessage(t *testing.T) {
 	}
 }
 
+func TestSpinnerUpdateMessage(t *testing.T) {
+	out := &syncBuffer{}
+	s := spinner.New(
+		spinner.WithInterval(10*time.Millisecond),
+		spinner.WithWriter(out),
+		spinner.WithStartMessage("Cloning repos"),
+		spinner.WithStopMessage("Cloned all repos"),
+	)
+	s.Start()
+	time.Sleep(15 * time.Millisecond)
+	s.UpdateMessage("Updating repos")
+	time.Sleep(15 * time.Millisecond)
+	s.UpdateMessage("Cleaning up")
+	time.Sleep(15 * time.Millisecond)
+	s.Stop()
+
+	// wait a bit because the spinner still has to erase before stopping
+	time.Sleep(25 * time.Millisecond)
+	got := out.String()
+
+	// Should be at least 4 frames
+	wantFrames := "⠋⠙⠹⠸"
+	if !containsAll(got, wantFrames) {
+		t.Errorf("got %q, want to contain all %q", got, wantFrames)
+	}
+
+	wantMsgs := []string{
+		"Cloning repos",
+		"Updating repos",
+		"Cleaning up",
+		"Cloned all repos",
+	}
+	for _, wantMsg := range wantMsgs {
+		if !strings.Contains(got, wantMsg) {
+			t.Errorf("got %q, want to contain %q", got, wantMsg)
+		}
+	}
+}
+
 func TestSpinnerPersist(t *testing.T) {
 	const count = 3
 	buf := &syncBuffer{}
@@ -154,9 +193,6 @@ func TestSpinnerPersist(t *testing.T) {
 		t.Errorf("got %q, want to contain all %q", got, wantFrames)
 	}
 
-	// Asserting the output is a bit tricky because of the special erase codes written
-	// to erase the text in terminals.
-	// Just make sure that the text we expect appears in the output
 	wantMsgs := []string{
 		"Cloning repos (0/3)",
 		"Cloning repos\n",
@@ -202,9 +238,6 @@ func TestSpinnerWrite(t *testing.T) {
 		t.Errorf("got %q, want to contain all %q", got, wantFrames)
 	}
 
-	// Asserting the output is a bit tricky because of the special erase codes written
-	// to erase the text in terminals.
-	// Just make sure that the text we expect appears in the output
 	wantMsgs := []string{
 		"debug stuff 1\n",
 		"debug stuff 2\n",
