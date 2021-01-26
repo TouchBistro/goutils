@@ -1,3 +1,4 @@
+// Package color provides functions for creating coloured strings.
 package color
 
 import (

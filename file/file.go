@@ -1,3 +1,4 @@
+// Package file provides various helpers for working with files on an OS filesystem.
 package file
 
 import (

@@ -1,3 +1,6 @@
+// Package command provides functionality for working with programs the host OS.
+// It provides a high level API over os/exec for running commands, which is
+// easier to use for common cases.
 package command
 
 import (

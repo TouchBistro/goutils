@@ -1,3 +1,5 @@
+// Package spinner provides a spinner that can be used to display progress to a user
+// in a command line application.
 package spinner
 
 import (
@@ -14,7 +16,18 @@ import (
 
 var frames = [...]string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// Spinner represents the state of the spinner.
+// Spinner represents the state of the spinner. A spinner can be created
+// using the spinner.New function.
+//
+// Spinner can keep track of and display progress through a list of items
+// that need to be completed.
+//
+// Spinner implements the io.Writer interface. It can be written to in order
+// to print messages while the spinner is running. It is not recommended to
+// write directly to the writer the spinner is writing to (by default stderr),
+// as it can cause issues with the spinner animation. Writing to the spinner
+// directly provides a way to get around this limitation, as the spinner will
+// ensure that the text will be written properly without interfering with the animation.
 type Spinner struct {
 	interval time.Duration
 	w        io.Writer
@@ -145,7 +158,7 @@ func (s *Spinner) Stop() {
 
 	s.active = false
 	s.stopChan <- struct{}{}
-	// Add last msg as a debug msg before we do the final erase.
+	// Persist last msg before we do the final erase.
 	// Need to do this manually since we aren't using setMsg
 	s.persistMsg()
 	s.erase()
