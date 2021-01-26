@@ -258,7 +258,7 @@ func TestSpinnerMaxMessageLength(t *testing.T) {
 		spinner.WithInterval(10*time.Millisecond),
 		spinner.WithWriter(out),
 		spinner.WithStartMessage("This message is way too long"),
-		spinner.WithMaxMessageLength(10),
+		spinner.WithMaxMessageLength(15),
 	)
 	s.Start()
 	time.Sleep(15 * time.Millisecond)
@@ -274,7 +274,7 @@ func TestSpinnerMaxMessageLength(t *testing.T) {
 		t.Errorf("got %q, want to contain all %q", got, wantFrames)
 	}
 
-	wantMsg := "This messa..."
+	wantMsg := "This message..."
 	if !strings.Contains(got, wantMsg) {
 		t.Errorf("got %q, want to contain %q", got, wantMsg)
 	}

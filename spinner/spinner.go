@@ -203,9 +203,9 @@ func (s *Spinner) setMsg(m string) {
 		m = m[:len(m)-1]
 	}
 	// Truncate msg if it's too long
-	if len(m) > s.maxMsgLen {
-		// DISCUSS(@cszatmary): Should the ... count as part of the length or no?
-		m = m[:s.maxMsgLen] + "..."
+	const ellipses = "..."
+	if len(m)-len(ellipses) > s.maxMsgLen {
+		m = m[:s.maxMsgLen-len(ellipses)] + ellipses
 	}
 	// Make sure message has a leading space to pad between it and the spinner icon
 	if m[0] != ' ' {
