@@ -48,8 +48,6 @@ type Spinner struct {
 	maxMsgLen int
 	// buffer to keep track of message to write to w
 	// these will be written on each call of erase
-	// a list of debug messages that will be written
-	// to debugw on the next frame
 	msgBuf      *bytes.Buffer
 	persistMsgs bool
 }
@@ -86,7 +84,7 @@ func WithInterval(d time.Duration) Option {
 	}
 }
 
-// WithWriter sets the writer that should be used for writting the spinner to.
+// WithWriter sets the writer that should be used for writing the spinner to.
 func WithWriter(w io.Writer) Option {
 	return func(s *Spinner) {
 		s.w = w
@@ -277,6 +275,8 @@ func (s *Spinner) run() {
 				}
 				fmt.Fprint(s.w, line)
 				s.lastOutput = line
+				// Store interval in a var because we unlock the mutex
+				// before sleeping so we can't read properties from s
 				d := s.interval
 
 				s.mu.Unlock()

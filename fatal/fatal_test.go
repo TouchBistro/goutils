@@ -29,7 +29,7 @@ func (c *client) Flush() {
 func resetState() {
 	// Before each: need to make sure global state is
 	// reset so it doesn't poison tests
-	ShowStackTraces(false)
+	PrintDetailedError(false)
 	OnExit(nil)
 }
 
@@ -162,7 +162,7 @@ func TestExitErrStack(t *testing.T) {
 
 	err := errors.New("err everything broke")
 
-	ShowStackTraces(true)
+	PrintDetailedError(true)
 
 	ExitErr(err, "Something broke")
 
@@ -209,7 +209,7 @@ func TestExitErrStackf(t *testing.T) {
 
 	err := errors.New("err everything broke")
 
-	ShowStackTraces(true)
+	PrintDetailedError(true)
 
 	ExitErrf(err, "%d failures", 3)
 
