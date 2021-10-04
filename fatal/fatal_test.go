@@ -2,12 +2,9 @@ package fatal
 
 import (
 	"bytes"
-	"fmt"
-	"regexp"
-	"strings"
 	"testing"
 
-	"github.com/pkg/errors"
+	"github.com/TouchBistro/goutils/errors"
 )
 
 type mockExit struct {
@@ -138,7 +135,7 @@ func TestExitErr(t *testing.T) {
 	errWriter = buf
 	exitFunc = me.Exit
 
-	err := errors.New("err everything broke")
+	err := errors.New(nil, "err everything broke", errors.Op("test.Foo"))
 
 	ExitErr(err, "Something broke")
 
@@ -160,7 +157,7 @@ func TestExitErrStack(t *testing.T) {
 	errWriter = buf
 	exitFunc = me.Exit
 
-	err := errors.New("err everything broke")
+	err := errors.New(nil, "err everything broke", errors.Op("test.Foo"))
 
 	PrintDetailedError(true)
 
@@ -169,11 +166,10 @@ func TestExitErrStack(t *testing.T) {
 	if me.code != 1 {
 		t.Errorf("got error code %d, expected 1", me.code)
 	}
-	want := "Something broke\n" +
-		"Error: err everything broke\n" +
-		"github.com/TouchBistro/goutils/fatal.TestExitErrStack\n" +
-		"\t.+"
-	testFormatRegexp(t, 0, err, buf.String(), want)
+	want := "Something broke\nError: test.Foo: err everything broke\n"
+	if buf.String() != want {
+		t.Errorf("got output\n%q\nwant\n%q", buf.String(), want)
+	}
 }
 
 func TestExitErrf(t *testing.T) {
@@ -185,7 +181,7 @@ func TestExitErrf(t *testing.T) {
 	errWriter = buf
 	exitFunc = me.Exit
 
-	err := errors.New("err everything broke")
+	err := errors.New(nil, "err everything broke", errors.Op("test.Foo"))
 
 	ExitErrf(err, "%d failures", 3)
 
@@ -207,7 +203,7 @@ func TestExitErrStackf(t *testing.T) {
 	errWriter = buf
 	exitFunc = me.Exit
 
-	err := errors.New("err everything broke")
+	err := errors.New(nil, "err everything broke", errors.Op("test.Foo"))
 
 	PrintDetailedError(true)
 
@@ -216,33 +212,8 @@ func TestExitErrStackf(t *testing.T) {
 	if me.code != 1 {
 		t.Errorf("got error code %d, expected 1", me.code)
 	}
-	want := "3 failures\n" +
-		"Error: err everything broke\n" +
-		"github.com/TouchBistro/goutils/fatal.TestExitErrStack\n" +
-		"\t.+"
-	testFormatRegexp(t, 0, err, buf.String(), want)
-}
-
-// Taken from https://github.com/pkg/errors/blob/614d223910a179a466c1767a985424175c39b465/format_test.go#L387
-// Helper to test string with regexp
-func testFormatRegexp(t *testing.T, n int, arg interface{}, format, want string) {
-	t.Helper()
-	got := fmt.Sprintf(format, arg)
-	gotLines := strings.SplitN(got, "\n", -1)
-	wantLines := strings.SplitN(want, "\n", -1)
-
-	if len(wantLines) > len(gotLines) {
-		t.Errorf("test %d: wantLines(%d) > gotLines(%d):\n got: %q\nwant: %q", n+1, len(wantLines), len(gotLines), got, want)
-		return
-	}
-
-	for i, w := range wantLines {
-		match, err := regexp.MatchString(w, gotLines[i])
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !match {
-			t.Errorf("test %d: line %d: fmt.Sprintf(%q, err):\n got: %q\nwant: %q", n+1, i+1, format, got, want)
-		}
+	want := "3 failures\nError: test.Foo: err everything broke\n"
+	if buf.String() != want {
+		t.Errorf("got output\n%q\nwant\n%q", buf.String(), want)
 	}
 }
