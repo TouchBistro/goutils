@@ -22,6 +22,12 @@ var frames = [...]string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧",
 // Spinner can keep track of and display progress through a list of items
 // that need to be completed.
 //
+// It is safe to use a Spinner across multiple goroutines.
+// The spinner will ensure only one goroutine at a time can modify it.
+//
+// The Spinner runs on a separate goroutine so that blocking operations can
+// be run on the current goroutine and the Spinner will continue displaying progress.
+//
 // Spinner implements the io.Writer interface. It can be written to in order
 // to print messages while the spinner is running. It is not recommended to
 // write directly to the writer the spinner is writing to (by default stderr),
