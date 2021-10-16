@@ -3,7 +3,6 @@
 package textutil
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -106,29 +105,4 @@ func ExpandVariablesString(src string, mapping func(string) string) string {
 	}
 	sb.WriteString(src[end:])
 	return sb.String()
-}
-
-func ExpandVariablesRegex(src []byte, mapping func(string) string) []byte {
-	// Regex to match variable substitution of the form ${VAR}
-	regex := regexp.MustCompile(`\$\{([\w-]+)\}`)
-	var result []byte
-
-	lastEndIndex := 0
-	for _, match := range regex.FindAllSubmatchIndex(src, -1) {
-		// match[0] is the start index of the whole match
-		startIndex := match[0]
-		// match[1] is the end index of the whole match (exclusive)
-		endIndex := match[1]
-		// match[2] is start index of group
-		startIndexGroup := match[2]
-		// match[3] is end index of group (exclusive)
-		endIndexGroup := match[3]
-
-		varName := string(src[startIndexGroup:endIndexGroup])
-		result = append(result, src[lastEndIndex:startIndex]...)
-		result = append(result, mapping(varName)...)
-		lastEndIndex = endIndex
-	}
-	result = append(result, src[lastEndIndex:]...)
-	return result
 }

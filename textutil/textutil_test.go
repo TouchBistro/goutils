@@ -78,21 +78,6 @@ func BenchmarkExpandVariables(b *testing.B) {
 	})
 }
 
-func BenchmarkExpandVariablesRegex(b *testing.B) {
-	b.Run("no-op", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			textutil.ExpandVariablesRegex([]byte("noop noop noop noop"), func(s string) string { return "" })
-		}
-	})
-	b.Run("multiple", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			textutil.ExpandVariablesRegex([]byte("${foo} ${foo} ${foo} ${foo}"), func(s string) string { return "bar" })
-		}
-	})
-}
-
 func BenchmarkExpandVariablesString(b *testing.B) {
 	b.Run("no-op", func(b *testing.B) {
 		b.ReportAllocs()
