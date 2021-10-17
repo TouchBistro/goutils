@@ -114,11 +114,3 @@ func BenchmarkRed(b *testing.B) {
 		}
 	})
 }
-
-// Using Regex
-// BenchmarkRed/no_strip-16         	  379442	      2852 ns/op	    1456 B/op	      23 allocs/op
-// BenchmarkRed/strip-16            	  365137	      3242 ns/op	    1456 B/op	      23 allocs/op
-
-// Using custom replace
-// BenchmarkRed/no_strip-16         	 6109512	       190.6 ns/op	      64 B/op	       4 allocs/op
-// BenchmarkRed/strip-16            	 5570493	       211.9 ns/op	      64 B/op	       4 allocs/op

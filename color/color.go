@@ -81,12 +81,6 @@ func apply(s string, start, end ansiCode) string {
 	sb.WriteString(s[j:])
 	sb.WriteString(reset)
 	return sb.String()
-
-	// OG, slow
-	// regex := regexp.MustCompile(fmt.Sprintf("\\x1b\\[%dm", end))
-	// // Remove any occurrences of reset to make sure color isn't messed up
-	// sanitized := regex.ReplaceAllString(s, "")
-	// return fmt.Sprintf("\x1b[%dm%s\x1b[%dm", start, sanitized, end)
 }
 
 // SetEnabled sets whether color is enabled or disabled.
