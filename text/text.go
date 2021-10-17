@@ -1,6 +1,6 @@
-// Package textutil provides various utilities for working with text.
+// Package text provides various utilities for working with text.
 // Most APIs have both string and []byte versions.
-package textutil
+package text
 
 import (
 	"strings"

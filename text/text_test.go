@@ -1,10 +1,10 @@
-package textutil_test
+package text_test
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/TouchBistro/goutils/textutil"
+	"github.com/TouchBistro/goutils/text"
 )
 
 var expandVariablesTests = []struct {
@@ -44,7 +44,7 @@ func testMapping(name string) string {
 func TestExpandVariables(t *testing.T) {
 	for _, tt := range expandVariablesTests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := textutil.ExpandVariables([]byte(tt.in), testMapping)
+			got := text.ExpandVariables([]byte(tt.in), testMapping)
 			if string(got) != string(tt.out) {
 				t.Errorf("got %q, want %q", got, tt.out)
 			}
@@ -55,7 +55,7 @@ func TestExpandVariables(t *testing.T) {
 func TestExpandVariablesString(t *testing.T) {
 	for _, tt := range expandVariablesTests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := textutil.ExpandVariablesString(tt.in, testMapping)
+			got := text.ExpandVariablesString(tt.in, testMapping)
 			if got != tt.out {
 				t.Errorf("got %q, want %q", got, tt.out)
 			}
@@ -65,30 +65,26 @@ func TestExpandVariablesString(t *testing.T) {
 
 func BenchmarkExpandVariables(b *testing.B) {
 	b.Run("no-op", func(b *testing.B) {
-		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			textutil.ExpandVariables([]byte("noop noop noop noop"), func(s string) string { return "" })
+			text.ExpandVariables([]byte("noop noop noop noop"), func(s string) string { return "" })
 		}
 	})
 	b.Run("multiple", func(b *testing.B) {
-		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			textutil.ExpandVariables([]byte("${foo} ${foo} ${foo} ${foo}"), func(s string) string { return "bar" })
+			text.ExpandVariables([]byte("${foo} ${foo} ${foo} ${foo}"), func(s string) string { return "bar" })
 		}
 	})
 }
 
 func BenchmarkExpandVariablesString(b *testing.B) {
 	b.Run("no-op", func(b *testing.B) {
-		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			textutil.ExpandVariablesString("noop noop noop noop", func(s string) string { return "" })
+			text.ExpandVariablesString("noop noop noop noop", func(s string) string { return "" })
 		}
 	})
 	b.Run("multiple", func(b *testing.B) {
-		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			textutil.ExpandVariablesString("${foo} ${foo} ${foo} ${foo}", func(s string) string { return "bar" })
+			text.ExpandVariablesString("${foo} ${foo} ${foo} ${foo}", func(s string) string { return "bar" })
 		}
 	})
 }
