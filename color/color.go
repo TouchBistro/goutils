@@ -13,12 +13,12 @@
 package color
 
 import (
-	"fmt"
 	"os"
-	"regexp"
+	"strconv"
+	"strings"
 )
 
-type ansiCode uint8
+type ansiCode int
 
 const (
 	fgBlack ansiCode = iota + 30
@@ -53,10 +53,40 @@ func apply(s string, start, end ansiCode) string {
 		return s
 	}
 
-	regex := regexp.MustCompile(fmt.Sprintf("\\x1b\\[%dm", end))
-	// Remove any occurrences of reset to make sure color isn't messed up
-	sanitized := regex.ReplaceAllString(s, "")
-	return fmt.Sprintf("\x1b[%dm%s\x1b[%dm", start, sanitized, end)
+	const prefix = "\x1b["
+	var sb strings.Builder
+	// Build out reset for the end
+	sb.WriteString(prefix)
+	sb.WriteString(strconv.Itoa(int(end)))
+	sb.WriteByte('m')
+	reset := sb.String()
+	sb.Reset()
+
+	// Build colored string.
+	// We also want to check if there are any occurrences of reset
+	// in s and remove them so that the color isn't messed up.
+	sb.WriteString(prefix)
+	sb.WriteString(strconv.Itoa(int(start)))
+	sb.WriteByte('m')
+
+	// We are only dealing with ASCII so it's safe to look at individual bytes.
+	j := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' && strings.HasPrefix(s[i:], reset) {
+			sb.WriteString(s[j:i])
+			i += len(reset) - 1 // -1 to account for i++
+			j = i + 1
+		}
+	}
+	sb.WriteString(s[j:])
+	sb.WriteString(reset)
+	return sb.String()
+
+	// OG, slow
+	// regex := regexp.MustCompile(fmt.Sprintf("\\x1b\\[%dm", end))
+	// // Remove any occurrences of reset to make sure color isn't messed up
+	// sanitized := regex.ReplaceAllString(s, "")
+	// return fmt.Sprintf("\x1b[%dm%s\x1b[%dm", start, sanitized, end)
 }
 
 // SetEnabled sets whether color is enabled or disabled.
