@@ -15,43 +15,49 @@ func TestColors(t *testing.T) {
 		want    string
 	}{
 		{
-			"Red() test",
+			"Black",
+			color.Black,
+			"foo bar",
+			"\x1b[30mfoo bar\x1b[39m",
+		},
+		{
+			"Red",
 			color.Red,
 			"foo bar",
 			"\x1b[31mfoo bar\x1b[39m",
 		},
 		{
-			"Green() test",
+			"Green",
 			color.Green,
 			"foo bar",
 			"\x1b[32mfoo bar\x1b[39m",
 		},
 		{
-			"Yellow() test",
+			"Yellow",
 			color.Yellow,
 			"foo bar",
 			"\x1b[33mfoo bar\x1b[39m",
 		},
 		{
-			"Blue() test",
+			"Blue",
 			color.Blue,
 			"foo bar",
 			"\x1b[34mfoo bar\x1b[39m",
 		},
 		{
-			"Magenta() test",
+			"Magenta",
 			color.Magenta,
 			"foo bar",
 			"\x1b[35mfoo bar\x1b[39m",
 		},
 		{
-			"Cyan() test",
+			"Cyan",
 			color.Cyan,
 			"foo bar",
 			"\x1b[36mfoo bar\x1b[39m",
 		},
 		{
-			"White() test",
+			"White",
 			color.White,
 			"foo bar",
 			"\x1b[37mfoo bar\x1b[39m",
