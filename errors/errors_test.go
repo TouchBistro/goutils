@@ -39,52 +39,52 @@ func TestErrorFormat(t *testing.T) {
 		},
 		{
 			name: "string format",
-			err: errors.Wrap(
-				internal,
-				"unable to create file",
-				errors.Op("test.Foo"),
-				fmt.Errorf("dir not exist"),
-			),
+			err: errors.Wrap(fmt.Errorf("dir not exist"), errors.Meta{
+				Kind:   internal,
+				Reason: "unable to create file",
+				Op:     errors.Op("test.Foo"),
+			}),
 			format: "%s",
 			want:   "internal error: unable to create file: dir not exist",
 		},
 		{
 			name: "detailed format",
-			err: errors.Wrap(
-				internal,
-				"unable to create file",
-				errors.Op("test.Foo"),
-				fmt.Errorf("dir not exist"),
-			),
+			err: errors.Wrap(fmt.Errorf("dir not exist"), errors.Meta{
+				Kind:   internal,
+				Reason: "unable to create file",
+				Op:     errors.Op("test.Foo"),
+			}),
 			format: "%+v",
 			want:   "test.Foo: internal error: unable to create file: dir not exist",
 		},
 		{
 			name: "detailed format with nested error",
 			err: errors.Wrap(
-				invalid,
-				"cannot find file",
-				errors.Op("test.Bar"),
 				errors.Wrap(
-					internal,
-					"no file for path",
-					errors.Op("test.Foo"),
 					fmt.Errorf("file not exist"),
+					errors.Meta{
+						Kind:   internal,
+						Reason: "no file for path",
+						Op:     errors.Op("test.Foo"),
+					},
 				),
+				errors.Meta{
+					Kind:   invalid,
+					Reason: "cannot find file",
+					Op:     errors.Op("test.Bar"),
+				},
 			),
 			format: "%+v",
 			want:   "test.Bar: invalid operation: cannot find file:\n\ttest.Foo: internal error: no file for path: file not exist",
 		},
 		{
 			name: "hoists kind wrapping error",
-			err: errors.Annotate(
-				"cannot find file",
-				errors.Op("test.Bar"),
-				errors.New(
-					internal,
-					"no file for path",
-					errors.Op("test.Foo"),
-				),
+			err: errors.Wrap(
+				errors.New(internal, "no file for path", errors.Op("test.Foo")),
+				errors.Meta{
+					Reason: "cannot find file",
+					Op:     errors.Op("test.Bar"),
+				},
 			),
 			format: "%s",
 			want:   "internal error: cannot find file: no file for path",
@@ -92,14 +92,16 @@ func TestErrorFormat(t *testing.T) {
 		{
 			name: "removes duplicate kind",
 			err: errors.Wrap(
-				internal,
-				"cannot find file",
-				errors.Op("test.Bar"),
 				errors.New(
 					internal,
 					"no file for path",
 					errors.Op("test.Foo"),
 				),
+				errors.Meta{
+					Kind:   internal,
+					Reason: "cannot find file",
+					Op:     errors.Op("test.Bar"),
+				},
 			),
 			format: "%s",
 			want:   "internal error: cannot find file: no file for path",
@@ -117,7 +119,7 @@ func TestErrorFormat(t *testing.T) {
 
 func TestDoesNotMutatePreviousError(t *testing.T) {
 	err1 := errors.New(invalid, "you can't do that", "")
-	err2 := errors.Annotate("no mutation", "", err1)
+	err2 := errors.Wrap(err1, errors.Meta{Reason: "no mutation"})
 	want := "invalid operation: no mutation: you can't do that"
 	if err2.Error() != want {
 		t.Errorf("got\n\t%s\nwant\n\t%s", err2, want)
@@ -179,7 +181,11 @@ func (e *pathError) Error() string {
 
 func TestIs(t *testing.T) {
 	const eof errors.String = "EOF"
-	err := errors.Wrap(internal, "unexpected end of file", errors.Op("config.Read"), eof)
+	err := errors.Wrap(eof, errors.Meta{
+		Kind:   internal,
+		Reason: "unexpected end of file",
+		Op:     errors.Op("config.Read"),
+	})
 	if !errors.Is(err, eof) {
 		t.Error("want err to contain eof")
 	}
@@ -187,7 +193,11 @@ func TestIs(t *testing.T) {
 
 func TestAs(t *testing.T) {
 	pathErr := &pathError{"/foo/bar", "file not found"}
-	err := errors.Wrap(invalid, "source does not exist", errors.Op("config.Read"), pathErr)
+	err := errors.Wrap(pathErr, errors.Meta{
+		Kind:   invalid,
+		Reason: "source does not exist",
+		Op:     errors.Op("config.Read"),
+	})
 	var gotErr *pathError
 	if !errors.As(err, &gotErr) {
 		t.Fatal("want err to contain an error of type *pathError")

@@ -33,8 +33,12 @@ import (
 
 // Error represents an error that occurred.
 // It contains a number of fields that provide details about the error.
+//
+// When wrapping another Error it is recommended to use Wrap instead of initializing
+// an Error directly to ensure a proper error chain is built.
 type Error struct {
-	// Kind is the category of error.
+	// Kind is the category of error. Kind can be used to group errors
+	// in order to better identify and action them.
 	Kind Kind
 	// Reason is a human-readable message containing
 	// the details of the error.
@@ -60,6 +64,8 @@ type Kind interface {
 }
 
 // Op describes an operation, usually a function or method name.
+// It is recommended to have Op be of the form package.function
+// or package.type.method to make it easy to identify the operation.
 //
 //   const op = errors.Op("foo.Bar")
 type Op string
@@ -69,19 +75,24 @@ func New(kind Kind, reason string, op Op) error {
 	return newError(kind, reason, op, nil)
 }
 
-// Wrap annotates err with kind, reason and op.
-func Wrap(kind Kind, reason string, op Op, err error) error {
-	return newError(kind, reason, op, err)
+// Wrap wraps an existing error. It can be used to provide additional context
+// to an error and create detailed error chains.
+//
+// If err is an Error, Wrap will create a copy of it and perform modifications
+// to make error chains nicer. If meta.Kind is nil, it will be hoisted from err.
+// If meta.Kind == err.Kind, err.Kind will be set to nil, to prevent duplicate kinds.
+func Wrap(err error, meta Meta) error {
+	return newError(meta.Kind, meta.Reason, meta.Op, err)
 }
 
-// Annotate annotates err with reason and op.
-func Annotate(reason string, op Op, err error) error {
-	return newError(nil, reason, op, err)
-}
-
-// WithOp annotates err with op.
-func WithOp(op Op, err error) error {
-	return newError(nil, "", op, err)
+// Meta allows for specifying the fields for a wrapped error provided to Wrap.
+type Meta struct {
+	// Kind is the category of error. See Error.Kind
+	Kind Kind
+	// Reason is the reason for the error. See Error.Reason.
+	Reason string
+	// Op is the operation being performed. See Error.Op.
+	Op Op
 }
 
 func newError(kind Kind, reason string, op Op, err error) error {
@@ -218,7 +229,7 @@ func (e List) Format(s fmt.State, verb rune) {
 }
 
 // The following is all functionality provided by the standard library errors package.
-// This is so that this package can be used exclusively for errors.
+// This is so that this package can be used as a full replacement.
 
 // String is a simple error based on a string.
 //
