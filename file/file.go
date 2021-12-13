@@ -2,10 +2,12 @@
 package file
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -27,23 +29,23 @@ func Exists(path string) bool {
 	return true
 }
 
-// Download creates or replaces a file at downloadPath by reading from r.
-func Download(downloadPath string, r io.Reader) (int64, error) {
+// Download creates or replaces a file at dst by reading from r.
+func Download(dst string, r io.Reader) (int64, error) {
 	// Check if file exists
-	downloadDir := filepath.Dir(downloadPath)
-	if err := os.MkdirAll(downloadDir, mkdirDefaultPerms); err != nil {
-		return 0, fmt.Errorf("failed to create directory %q: %w", downloadDir, err)
+	dstDir := filepath.Dir(dst)
+	if err := os.MkdirAll(dstDir, mkdirDefaultPerms); err != nil {
+		return 0, fmt.Errorf("failed to create directory %q: %w", dstDir, err)
 	}
 
 	// Write payload to target dir
-	f, err := os.Create(downloadPath)
+	f, err := os.Create(dst)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create file %q: %w", downloadPath, err)
+		return 0, fmt.Errorf("failed to create file %q: %w", dst, err)
 	}
 	defer f.Close()
 	n, err := io.Copy(f, r)
 	if err != nil {
-		return 0, fmt.Errorf("failed writing data to file %q: %w", downloadPath, err)
+		return 0, fmt.Errorf("failed writing data to file %q: %w", dst, err)
 	}
 	return n, nil
 }
@@ -109,7 +111,7 @@ func copyDirContents(src, dst string, info os.FileInfo) error {
 		return fmt.Errorf("failed to create directory %q: %w", dst, err)
 	}
 
-	contents, err := ioutil.ReadDir(src)
+	contents, err := os.ReadDir(src)
 	if err != nil {
 		return fmt.Errorf("failed to read contents of directory %q: %w", src, err)
 	}
@@ -117,21 +119,23 @@ func copyDirContents(src, dst string, info os.FileInfo) error {
 	for _, item := range contents {
 		srcItemPath := filepath.Join(src, item.Name())
 		dstItemPath := filepath.Join(dst, item.Name())
+		fi, err := item.Info()
+		if err != nil {
+			return fmt.Errorf("failed to get info of %q: %w", srcItemPath, err)
+		}
 
 		if item.IsDir() {
-			err := copyDirContents(srcItemPath, dstItemPath, item)
+			err := copyDirContents(srcItemPath, dstItemPath, fi)
 			if err != nil {
 				return fmt.Errorf("failed to copy directory %q: %w", srcItemPath, err)
 			}
 			continue
 		}
-		if !item.Mode().IsRegular() {
+		if !fi.Mode().IsRegular() {
 			// Unsupported file type, ignore
 			continue
 		}
-
-		err := copyFile(srcItemPath, dstItemPath, item)
-		if err != nil {
+		if err := copyFile(srcItemPath, dstItemPath, fi); err != nil {
 			return fmt.Errorf("failed to copy file %q: %w", srcItemPath, err)
 		}
 	}
@@ -169,4 +173,71 @@ func DirLen(path string) (int, error) {
 	}
 	list, err := dir.Readdirnames(0)
 	return len(list), err
+}
+
+// Untar reads the tar file from r and writes it to dir.
+// It can handle gzip-compressed tar files.
+func Untar(dir string, r io.Reader) error {
+	// Determine if we are dealing with a gzip-compressed tar file.
+	// gzip files are identified by the first 3 bytes.
+	// See section 2.3.1. of RFC 1952: https://www.ietf.org/rfc/rfc1952.txt
+	buf := make([]byte, 3)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return fmt.Errorf("unable to check if tar file is gzip-compressed: %w", err)
+	}
+
+	// Need to create a new reader with the 3 bytes added back to move back to the
+	// start of the file. Can do this by concatenating buf with r.
+	rr := io.MultiReader(bytes.NewReader(buf), r)
+	if buf[0] == 0x1f && buf[1] == 0x8b && buf[2] == 8 {
+		gzr, err := gzip.NewReader(rr)
+		if err != nil {
+			return fmt.Errorf("unable to read gzip-compressed tar file: %w", err)
+		}
+		defer gzr.Close()
+		rr = gzr
+	}
+	tr := tar.NewReader(rr)
+
+	// Now we get to the fun part, the actual tar extraction.
+	// Loop through each entry in the archive and extract it.
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			// End of the archive, we are done.
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("untar: read error: %w", err)
+		}
+
+		dst := filepath.Join(dir, hdr.Name)
+		mode := hdr.FileInfo().Mode()
+		switch {
+		case mode.IsDir():
+			if err := os.MkdirAll(dst, mkdirDefaultPerms); err != nil {
+				return fmt.Errorf("untar: create directory error: %w", err)
+			}
+		case mode.IsRegular():
+			f, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, mode.Perm())
+			if err != nil {
+				return fmt.Errorf("untar: create file error: %w", err)
+			}
+			n, err := io.Copy(f, tr)
+
+			// We need to manually close the file here instead of using defer since defer runs when
+			// the function exits and would cause all files to remain open until this loop is finished.
+			if closeErr := f.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
+			if err != nil {
+				return fmt.Errorf("untar: error writing file to %s: %w", dst, err)
+			}
+			// Make sure the right amount of bytes were written just to be safe.
+			if n != hdr.Size {
+				return fmt.Errorf("untar: only wrote %d bytes to %s; expected %d", n, dst, hdr.Size)
+			}
+		default:
+			return fmt.Errorf("tar file entry %s has unsupported file type %v", hdr.Name, mode)
+		}
+	}
 }
