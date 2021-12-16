@@ -202,8 +202,9 @@ func TestUntar(t *testing.T) {
 		name string
 		path string
 	}{
-		{"normal tar file", "testdata/test.tar"},
-		{"gzip-compressed tar file", "testdata/test.tgz"},
+		{"normal tar file", "testdata/basic.tar"},
+		{"gzip-compressed tar file", "testdata/basic.tgz"},
+		{"tar file without directories", "testdata/basic_nodirs.tgz"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

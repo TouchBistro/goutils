@@ -177,6 +177,9 @@ func DirLen(path string) (int, error) {
 
 // Untar reads the tar file from r and writes it to dir.
 // It can handle gzip-compressed tar files.
+//
+// Note that Untar will overwrite any existing files with the same path
+// as files in the archive.
 func Untar(dir string, r io.Reader) error {
 	// Determine if we are dealing with a gzip-compressed tar file.
 	// gzip files are identified by the first 3 bytes.
@@ -202,7 +205,7 @@ func Untar(dir string, r io.Reader) error {
 	// Now we get to the fun part, the actual tar extraction.
 	// Loop through each entry in the archive and extract it.
 	for {
-		hdr, err := tr.Next()
+		header, err := tr.Next()
 		if err == io.EOF {
 			// End of the archive, we are done.
 			return nil
@@ -210,15 +213,23 @@ func Untar(dir string, r io.Reader) error {
 			return fmt.Errorf("untar: read error: %w", err)
 		}
 
-		dst := filepath.Join(dir, hdr.Name)
-		mode := hdr.FileInfo().Mode()
+		dst := filepath.Join(dir, header.Name)
+		mode := header.FileInfo().Mode()
 		switch {
 		case mode.IsDir():
 			if err := os.MkdirAll(dst, mkdirDefaultPerms); err != nil {
 				return fmt.Errorf("untar: create directory error: %w", err)
 			}
 		case mode.IsRegular():
-			f, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, mode.Perm())
+			// Ensure the directory exists. Usually this shouldn't be required since there
+			// should be a directory entry in the tar file that created the directory beforehand.
+			// However, testing has revealed that this is not always the case and there can be
+			// tar files without directory entries so we should handle those cases.
+			if err := os.MkdirAll(filepath.Dir(dst), mkdirDefaultPerms); err != nil {
+				return fmt.Errorf("untar: create directory error: %w", err)
+			}
+			// Now we can create the actual file. Untar will overwrite any existing files.
+			f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode.Perm())
 			if err != nil {
 				return fmt.Errorf("untar: create file error: %w", err)
 			}
@@ -233,11 +244,11 @@ func Untar(dir string, r io.Reader) error {
 				return fmt.Errorf("untar: error writing file to %s: %w", dst, err)
 			}
 			// Make sure the right amount of bytes were written just to be safe.
-			if n != hdr.Size {
-				return fmt.Errorf("untar: only wrote %d bytes to %s; expected %d", n, dst, hdr.Size)
+			if n != header.Size {
+				return fmt.Errorf("untar: only wrote %d bytes to %s; expected %d", n, dst, header.Size)
 			}
 		default:
-			return fmt.Errorf("tar file entry %s has unsupported file type %v", hdr.Name, mode)
+			return fmt.Errorf("tar file entry %s has unsupported file type %v", header.Name, mode)
 		}
 	}
 }
