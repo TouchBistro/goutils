@@ -51,6 +51,7 @@ func Run(ctx context.Context, opts RunOptions, fn RunFunc) error {
 		if err != nil {
 			return err
 		}
+	// Handle the context being cancelled or the deadline being exceeded.
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -130,14 +131,19 @@ func RunParallel(ctx context.Context, opts RunParallelOptions, fn RunParallelFun
 	for i := 0; i < opts.Count; i++ {
 		select {
 		case err := <-errCh:
+			// No error occurred, continue
 			if err == nil {
 				continue
 			}
+			// Handle error based on how RunParallel was configured.
 			if opts.CancelOnError {
+				// Bail and cancel any runs that are in progress.
 				cancel()
 				return err
 			}
+			// Continue and keep track of the error.
 			errs = append(errs, err)
+		// Handle the context being cancelled or the deadline being exceeded.
 		case <-ctx.Done():
 			return ctx.Err()
 		}

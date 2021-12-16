@@ -15,11 +15,11 @@ import (
 )
 
 func TestTrackerFromContext(t *testing.T) {
-	tkr := &progress.PlainTracker{}
-	ctx := progress.ContextWithTracker(context.Background(), tkr)
+	tracker := &progress.PlainTracker{}
+	ctx := progress.ContextWithTracker(context.Background(), tracker)
 	got := progress.TrackerFromContext(ctx)
-	if got != tkr {
-		t.Errorf("got %+v, want %+v", got, tkr)
+	if got != tracker {
+		t.Errorf("got %+v, want %+v", got, tracker)
 	}
 }
 
@@ -33,12 +33,12 @@ func TestTrackerFromContextMissing(t *testing.T) {
 
 func TestPlainTracker(t *testing.T) {
 	var buf bytes.Buffer
-	tkr := &progress.PlainTracker{Logger: &logger{out: &buf}}
-	tkr.Info("hello world")
-	tkr.Start("doing stuff", 4)
-	tkr.WithFields(progress.Fields{"id": "foo"}).Debug("processing...")
-	tkr.UpdateMessage("cleaning up")
-	tkr.Stop()
+	tracker := &progress.PlainTracker{Logger: &logger{out: &buf}}
+	tracker.Info("hello world")
+	tracker.Start("doing stuff", 4)
+	tracker.WithFields(progress.Fields{"id": "foo"}).Debug("processing...")
+	tracker.UpdateMessage("cleaning up")
+	tracker.Stop()
 
 	got := buf.String()
 	want := `info hello world
@@ -53,18 +53,18 @@ info cleaning up
 
 func TestSpinnerTracker(t *testing.T) {
 	var buf bytes.Buffer
-	tkr := &progress.SpinnerTracker{
+	tracker := &progress.SpinnerTracker{
 		OutputLogger: &logger{out: &buf},
 		Interval:     10 * time.Millisecond,
 	}
-	tkr.Info("hello world")
-	tkr.Start("doing stuff", 2)
+	tracker.Info("hello world")
+	tracker.Start("doing stuff", 2)
 	time.Sleep(15 * time.Millisecond)
-	tkr.WithFields(progress.Fields{"id": "foo"}).Debug("processing...")
-	tkr.Inc()
-	tkr.UpdateMessage("cleaning up")
+	tracker.WithFields(progress.Fields{"id": "foo"}).Debug("processing...")
+	tracker.Inc()
+	tracker.UpdateMessage("cleaning up")
 	time.Sleep(15 * time.Millisecond)
-	tkr.Stop()
+	tracker.Stop()
 
 	// wait a bit because the spinner still has to erase before stopping
 	time.Sleep(25 * time.Millisecond)

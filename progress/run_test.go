@@ -3,6 +3,7 @@ package progress_test
 import (
 	"bytes"
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -14,23 +15,23 @@ const errOops errors.String = "oops"
 
 func TestRun(t *testing.T) {
 	var buf bytes.Buffer
-	tkr := &mockSpinnerTracker{logger: &logger{out: &buf}}
-	ctx := progress.ContextWithTracker(context.Background(), tkr)
+	tracker := &mockSpinnerTracker{logger: &logger{out: &buf}}
+	ctx := progress.ContextWithTracker(context.Background(), tracker)
 	err := progress.Run(ctx, progress.RunOptions{
 		Message: "performing operation",
 	}, func(ctx context.Context) error {
-		if !tkr.active {
+		if !tracker.active {
 			t.Error("want tracker to be running, but isn't")
 		}
 
-		tkr.Debug("doing stuff")
+		tracker.Debug("doing stuff")
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if tkr.active {
+	if tracker.active {
 		t.Error("want tracker to be stopped, but isn't")
 	}
 	gotLogs := buf.String()
@@ -68,8 +69,8 @@ func TestRunError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			tkr := &mockSpinnerTracker{logger: &logger{out: &buf}}
-			ctx := progress.ContextWithTracker(context.Background(), tkr)
+			tracker := &mockSpinnerTracker{logger: &logger{out: &buf}}
+			ctx := progress.ContextWithTracker(context.Background(), tracker)
 			err := progress.Run(ctx, progress.RunOptions{
 				Message: "performing operation",
 				Timeout: 5 * time.Millisecond,
@@ -83,8 +84,8 @@ func TestRunError(t *testing.T) {
 
 func TestRunParallel(t *testing.T) {
 	var buf bytes.Buffer
-	tkr := &mockSpinnerTracker{logger: &logger{out: &buf}}
-	ctx := progress.ContextWithTracker(context.Background(), tkr)
+	tracker := &mockSpinnerTracker{logger: &logger{out: &buf}}
+	ctx := progress.ContextWithTracker(context.Background(), tracker)
 	outCh := make(chan int, 3)
 	err := progress.RunParallel(ctx, progress.RunParallelOptions{
 		Message: "performing operation",
@@ -98,15 +99,19 @@ func TestRunParallel(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if tkr.active {
+	if tracker.active {
 		t.Error("want tracker to be stopped, but isn't")
 	}
 	var vals []int
 	for i := range outCh {
 		vals = append(vals, i)
 	}
+	sort.Ints(vals)
 	if len(vals) != 3 {
 		t.Errorf("got %d values, want 3", len(vals))
+	}
+	if vals[0] != 0 || vals[1] != 1 || vals[2] != 2 {
+		t.Errorf("got %v, want [0 1 2]", vals)
 	}
 }
 
@@ -138,8 +143,8 @@ func TestRunParallelError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			tkr := &mockSpinnerTracker{logger: &logger{out: &buf}}
-			ctx := progress.ContextWithTracker(context.Background(), tkr)
+			tracker := &mockSpinnerTracker{logger: &logger{out: &buf}}
+			ctx := progress.ContextWithTracker(context.Background(), tracker)
 			err := progress.RunParallel(ctx, progress.RunParallelOptions{
 				Message:       "performing operation",
 				Count:         3,
@@ -155,8 +160,8 @@ func TestRunParallelError(t *testing.T) {
 
 func TestRunParallelMultipleErrors(t *testing.T) {
 	var buf bytes.Buffer
-	tkr := &mockSpinnerTracker{logger: &logger{out: &buf}}
-	ctx := progress.ContextWithTracker(context.Background(), tkr)
+	tracker := &mockSpinnerTracker{logger: &logger{out: &buf}}
+	ctx := progress.ContextWithTracker(context.Background(), tracker)
 	err := progress.RunParallel(ctx, progress.RunParallelOptions{
 		Message: "performing operation",
 		Count:   3,
