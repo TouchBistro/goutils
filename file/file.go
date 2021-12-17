@@ -204,6 +204,7 @@ func Untar(dir string, r io.Reader) error {
 
 	// Now we get to the fun part, the actual tar extraction.
 	// Loop through each entry in the archive and extract it.
+	madeDirs := make(map[string]struct{})
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
@@ -220,13 +221,18 @@ func Untar(dir string, r io.Reader) error {
 			if err := os.MkdirAll(dst, mkdirDefaultPerms); err != nil {
 				return fmt.Errorf("untar: create directory error: %w", err)
 			}
+			madeDirs[dst] = struct{}{}
 		case mode.IsRegular():
 			// Ensure the directory exists. Usually this shouldn't be required since there
 			// should be a directory entry in the tar file that created the directory beforehand.
 			// However, testing has revealed that this is not always the case and there can be
 			// tar files without directory entries so we should handle those cases.
-			if err := os.MkdirAll(filepath.Dir(dst), mkdirDefaultPerms); err != nil {
-				return fmt.Errorf("untar: create directory error: %w", err)
+			dir := filepath.Dir(dst)
+			if _, ok := madeDirs[dir]; !ok {
+				if err := os.MkdirAll(dir, mkdirDefaultPerms); err != nil {
+					return fmt.Errorf("untar: create directory error: %w", err)
+				}
+				madeDirs[dir] = struct{}{}
 			}
 			// Now we can create the actual file. Untar will overwrite any existing files.
 			f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode.Perm())
