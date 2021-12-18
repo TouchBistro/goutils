@@ -204,6 +204,7 @@ func Untar(dir string, r io.Reader) error {
 
 	// Now we get to the fun part, the actual tar extraction.
 	// Loop through each entry in the archive and extract it.
+	// Keep track of a list of dirs created so we don't waste time creating the same dir multiple times.
 	madeDirs := make(map[string]struct{})
 	for {
 		header, err := tr.Next()
@@ -215,25 +216,27 @@ func Untar(dir string, r io.Reader) error {
 		}
 
 		dst := filepath.Join(dir, header.Name)
+		// Ensure the parent directory exists. Usually this shouldn't be required since there
+		// should be a directory entry in the tar file that created the directory beforehand.
+		// However, testing has revealed that this is not always the case and there can be
+		// tar files without directory entries so we should handle those cases.
+		parentDir := filepath.Dir(dst)
+		if _, ok := madeDirs[parentDir]; !ok {
+			if err := os.MkdirAll(parentDir, mkdirDefaultPerms); err != nil {
+				return fmt.Errorf("untar: create directory error: %w", err)
+			}
+			madeDirs[parentDir] = struct{}{}
+		}
+
 		mode := header.FileInfo().Mode()
 		switch {
 		case mode.IsDir():
 			if err := os.MkdirAll(dst, mkdirDefaultPerms); err != nil {
 				return fmt.Errorf("untar: create directory error: %w", err)
 			}
+			// Mark the dir as created so files in this dir don't need to create it again.
 			madeDirs[dst] = struct{}{}
 		case mode.IsRegular():
-			// Ensure the directory exists. Usually this shouldn't be required since there
-			// should be a directory entry in the tar file that created the directory beforehand.
-			// However, testing has revealed that this is not always the case and there can be
-			// tar files without directory entries so we should handle those cases.
-			dir := filepath.Dir(dst)
-			if _, ok := madeDirs[dir]; !ok {
-				if err := os.MkdirAll(dir, mkdirDefaultPerms); err != nil {
-					return fmt.Errorf("untar: create directory error: %w", err)
-				}
-				madeDirs[dir] = struct{}{}
-			}
 			// Now we can create the actual file. Untar will overwrite any existing files.
 			f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode.Perm())
 			if err != nil {
@@ -252,6 +255,11 @@ func Untar(dir string, r io.Reader) error {
 			// Make sure the right amount of bytes were written just to be safe.
 			if n != header.Size {
 				return fmt.Errorf("untar: only wrote %d bytes to %s; expected %d", n, dst, header.Size)
+			}
+		case mode&os.ModeSymlink != 0:
+			// Entry is a symlink, need to create a symlink to the target
+			if err := os.Symlink(header.Linkname, dst); err != nil {
+				return fmt.Errorf("untar: symlink error: %w", err)
 			}
 		default:
 			return fmt.Errorf("tar file entry %s has unsupported file type %v", header.Name, mode)

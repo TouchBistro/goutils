@@ -229,6 +229,36 @@ func TestUntar(t *testing.T) {
 	}
 }
 
+func TestUntarSymlink(t *testing.T) {
+	const path = "testdata/basic_symlink.tgz"
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("failed to open %s: %v", path, err)
+	}
+	t.Cleanup(func() {
+		f.Close()
+	})
+
+	tmpdir := t.TempDir()
+	err = file.Untar(tmpdir, f)
+	if err != nil {
+		t.Fatalf("want nil error, got %v", err)
+	}
+
+	assertFile(t, filepath.Join(tmpdir, "a.txt"), "This is a file\n")
+	// Check that symlink was created with the right path
+	cPath := filepath.Join(tmpdir, "b/c.txt")
+	link, err := os.Readlink(cPath)
+	if err != nil {
+		t.Fatalf("failed to read link %s: %v", cPath, err)
+	}
+	const wantLink = "../a.txt"
+	if link != wantLink {
+		t.Errorf("got symlink %q, want %q", link, wantLink)
+	}
+	assertFile(t, cPath, "This is a file\n")
+}
+
 func assertFile(t *testing.T, path, want string) {
 	t.Helper()
 	b, err := os.ReadFile(path)
