@@ -23,7 +23,7 @@ type Fields = progress.Fields
 // provide synchronization. These features must be implemented by
 // the hook if required.
 type Hook interface {
-	Run(*Entry) error
+	Run(e *Entry) error
 }
 
 // Logger is a structured logger that supports logging at different levels.
