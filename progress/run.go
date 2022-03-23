@@ -35,32 +35,11 @@ type RunFunc func(ctx context.Context) error
 //
 // opts can be used to customize the behaviour of Run. See each option for more details.
 func Run(ctx context.Context, opts RunOptions, fn RunFunc) error {
-	if opts.Timeout == 0 {
-		// Always provide a timeout to make sure the program doesn't hang and run forever.
-		opts.Timeout = defaultTimeout
-	}
-
-	t := TrackerFromContext(ctx)
-	defer t.Stop()
-	ctx, cancel := context.WithTimeout(ctx, opts.Timeout)
-	defer cancel()
-
-	t.Start(opts.Message, opts.Count)
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- fn(ctx)
-	}()
-
-	select {
-	case err := <-errCh:
-		if err != nil {
-			return err
-		}
-	// Handle the context being cancelled or the deadline being exceeded.
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	return nil
+	_, err := RunT(ctx, opts, func(ctx context.Context) (struct{}, error) {
+		err := fn(ctx)
+		return struct{}{}, err
+	})
+	return err
 }
 
 // RunFuncT is like RunFunc but allows returning a value.
@@ -137,62 +116,11 @@ type RunParallelFunc func(ctx context.Context, i int) error
 //
 // opts can be used to customize the behaviour of RunParallel. See each option for more details.
 func RunParallel(ctx context.Context, opts RunParallelOptions, fn RunParallelFunc) error {
-	// No-op if count is zero since we have nothing to run.
-	if opts.Count < 1 {
-		return nil
-	}
-	if opts.Timeout == 0 {
-		// Always provide a timeout to make sure the program doesn't hang and run forever.
-		opts.Timeout = defaultTimeout
-	}
-	if opts.Concurrency < 1 {
-		opts.Concurrency = DefaultConcurrency()
-	}
-
-	t := TrackerFromContext(ctx)
-	defer t.Stop()
-	ctx, cancel := context.WithTimeout(ctx, opts.Timeout)
-	defer cancel()
-
-	t.Start(opts.Message, opts.Count)
-	errCh := make(chan error, opts.Count)
-	semCh := make(chan struct{}, opts.Concurrency)
-	for i := 0; i < opts.Count; i++ {
-		semCh <- struct{}{}
-		go func(i int) {
-			defer func() {
-				<-semCh
-			}()
-			errCh <- fn(ctx, i)
-			t.Inc()
-		}(i)
-	}
-
-	var errs errors.List
-	for i := 0; i < opts.Count; i++ {
-		select {
-		case err := <-errCh:
-			// No error occurred, continue
-			if err == nil {
-				continue
-			}
-			// Handle error based on how RunParallel was configured.
-			if opts.CancelOnError {
-				// Bail and cancel any runs that are in progress.
-				cancel()
-				return err
-			}
-			// Continue and keep track of the error.
-			errs = append(errs, err)
-		// Handle the context being cancelled or the deadline being exceeded.
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	if len(errs) > 0 {
-		return errs
-	}
-	return nil
+	_, err := RunParallelT(ctx, opts, func(ctx context.Context, i int) (struct{}, error) {
+		err := fn(ctx, i)
+		return struct{}{}, err
+	})
+	return err
 }
 
 // RunParallelFuncT is like RunParallelFunc but allows returning a value.
