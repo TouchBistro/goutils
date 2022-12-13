@@ -24,6 +24,10 @@ type RunOptions struct {
 	// Timeout sets a timeout after which the running function will be cancelled.
 	// Defaults to 10min if omitted.
 	Timeout time.Duration
+	// TrackerKey can be used to specify a custom context key for retrieving a Tracker.
+	// This should be used if ContextWithTrackerUsingKey was used.
+	// If omitted, the default key will be used.
+	TrackerKey any
 }
 
 // RunFunc is a function run by Run. ctx should be passed to any operations
@@ -52,7 +56,7 @@ func RunT[T any](ctx context.Context, opts RunOptions, fn RunFuncT[T]) (T, error
 		opts.Timeout = defaultTimeout
 	}
 
-	tracker := TrackerFromContext(ctx)
+	tracker := TrackerFromContextUsingKey(ctx, opts.TrackerKey)
 	defer tracker.Stop()
 	ctx, cancel := context.WithTimeout(ctx, opts.Timeout)
 	defer cancel()
@@ -101,6 +105,10 @@ type RunParallelOptions struct {
 	// Timeout sets a timeout after which any running functions will be cancelled.
 	// Defaults to 10min if omitted.
 	Timeout time.Duration
+	// TrackerKey can be used to specify a custom context key for retrieving a Tracker.
+	// This should be used if ContextWithTrackerUsingKey was used.
+	// If omitted, the default key will be used.
+	TrackerKey any
 }
 
 // RunParallelFunc is a function run by RunParallel. ctx should be passed to any operations
@@ -141,7 +149,7 @@ func RunParallelT[T any](ctx context.Context, opts RunParallelOptions, fn RunPar
 		opts.Concurrency = DefaultConcurrency()
 	}
 
-	tracker := TrackerFromContext(ctx)
+	tracker := TrackerFromContextUsingKey(ctx, opts.TrackerKey)
 	defer tracker.Stop()
 	ctx, cancel := context.WithTimeout(ctx, opts.Timeout)
 	defer cancel()
